@@ -1,0 +1,76 @@
+name: SonarQube + GPT-4.1 Security Scan
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  sonar-gpt:
+    runs-on: ubuntu-latest
+
+    env:
+      SONAR_TOKEN: ${{ secrets.SONARQUBE_TOKEN }}
+      SONAR_HOST: ${{ secrets.SONARQUBE_HOST }}
+      SONAR_PROJECT_KEY: devui
+      AZURE_STORAGE_ACCOUNT: ${{ secrets.AZURE_STORAGE_ACCOUNT }}
+      BLOB_SAS_TOKEN: ${{ secrets.BLOB_SAS_TOKEN }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Restore .NET dependencies
+        run: dotnet restore
+
+      - name: Build app
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Download SonarScanner CLI
+        run: |
+          wget -O sonar-scanner.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
+          unzip sonar-scanner.zip
+
+      - name: Run SonarQube Scan
+        run: |
+          ./sonar-scanner-*/bin/sonar-scanner \
+            -Dsonar.projectKey=${{ env.SONAR_PROJECT_KEY }} \
+            -Dsonar.host.url=${{ env.SONAR_HOST }} \
+            -Dsonar.login=${{ env.SONAR_TOKEN }} \
+            -Dsonar.qualitygate.wait=true || true
+
+      # Find the SonarQube JSON report
+      - name: Find SonarQube report
+        id: find_report
+        run: |
+          REPORT_PATH=$(find . -type f -name "sonar-report.json" | head -n 1)
+          if [ -z "$REPORT_PATH" ]; then
+            echo "SonarQube report not found!"; exit 1
+          fi
+          echo "REPORT_PATH=$REPORT_PATH" >> $GITHUB_ENV
+
+      # Beautify the report
+      - name: Beautify SonarQube JSON
+        run: jq '.' "$REPORT_PATH" > sonar-report-beautified.json
+
+      # Reduce the report for GPT summary
+      - name: Reduce SonarQube JSON
+        run: |
+          jq '{issues: [.issues[] | {file: .component, message: .message, severity: .severity, rule: .rule}]}' sonar-report-beautified.json > reduced-sonar-report.json
+
+      # Upload the reduced report to Azure Blob Storage
+      - name: Upload to Azure Blob Storage
+        uses: azure/cli@v2
+        with:
+          azcliversion: 2.53.0
+          inlineScript: |
+            az storage blob upload \
+              --account-name ${{ env.AZURE_STORAGE_ACCOUNT }} \
+              --container-name sonarinput \
+              --name "reduced-sonar-report-$(date +%Y%m%d%H%M%S).json" \
+              --file reduced-sonar-report.json \
+              --sas-token ${{ env.BLOB_SAS_TOKEN }}
+
+      - name: Job complete
+        run: echo "SonarQube scan finished and report uploaded for GPT-4.1 analysis."
