@@ -1,4 +1,4 @@
-name: SonarQube + GPT-4.1 Security Scan
+name: SonarQube + GPT-4.1 Security Scan (Angular)
 
 on:
   push:
@@ -11,9 +11,9 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      SONAR_TOKEN: ${{ secrets.SONARQUBE_TOKEN }}
-      SONAR_HOST: ${{ secrets.SONARQUBE_HOST }}
-      SONAR_PROJECT_KEY: devui
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST: ${{ secrets.SONAR_HOST_URL }}
+      SONAR_PROJECT_KEY: Devui
       AZURE_STORAGE_ACCOUNT: ${{ secrets.AZURE_STORAGE_ACCOUNT }}
       BLOB_SAS_TOKEN: ${{ secrets.BLOB_SAS_TOKEN }}
 
@@ -21,17 +21,26 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Restore .NET dependencies
-        run: dotnet restore
+      - name: Use Node.js 18.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18.x'
 
-      - name: Build app
-        run: dotnet build --no-restore --configuration Release
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Download SonarScanner CLI
+      - name: Build Angular project
+        run: npm run build --if-present
+  
+      - name: Run ESLint
+        run: npx eslint src --format json -o eslint-report.json
+
+      - name: Download SonarScanner
         run: |
-          wget -O sonar-scanner.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
-          unzip sonar-scanner.zip
-
+          wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
+          unzip sonar-scanner-cli-5.0.1.3006-linux.zip
+          export PATH="$PATH:$(pwd)/sonar-scanner-5.0.1.3006-linux/bin"
+        
       - name: Run SonarQube Scan
         run: |
           ./sonar-scanner-*/bin/sonar-scanner \
