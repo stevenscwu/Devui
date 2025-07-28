@@ -1,7 +1,8 @@
 # See http://help.github.com/ignore-files/ for more about ignoring files.
 
-#secrets
+# secrets
 **/local.settings.json
+azure-functions/local.settings.json
 
 # compiled output
 /dist
