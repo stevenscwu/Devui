@@ -1,0 +1,86 @@
+name: Angular SonarQube GPT Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  scan_and_report:
+    runs-on: [self-hosted, Linux, X64]
+
+    env:
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      AZURE_STORAGE_SAS_TOKEN: ${{ secrets.BLOB_SAS_TOKEN }}
+      AZURE_STORAGE_ACCOUNT: ${{ secrets.AZURE_STORAGE_ACCOUNT }}
+      AZURE_STORAGE_CONTAINER: sonarinput
+      AZURE_STORAGE_CONTAINER_FULL: fulljson
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies and Build
+        run: |
+          npm install
+          npm run build --prod
+
+      - name: Run unit tests and generate coverage
+        run: npm run test -- --watch=false --code-coverage
+
+      - name: Download SonarScanner
+        run: |
+          wget -q https://github.com/SonarSource/sonar-scanner-cli/releases/download/5.0.1.3006/sonar-scanner-cli-5.0.1.3006-linux.zip
+          unzip sonar-scanner-cli-5.0.1.3006-linux.zip
+          mv sonar-scanner-5.0.1.3006-linux sonar-scanner
+          chmod +x sonar-scanner/bin/sonar-scanner
+          ./sonar-scanner/bin/sonar-scanner --version
+
+      - name: Run SonarQube Scan
+        run: |
+          ./sonar-scanner/bin/sonar-scanner \
+            -Dsonar.projectKey=devui-angular \
+            -Dsonar.sources=src \
+            -Dsonar.host.url=${{ env.SONAR_HOST_URL }} \
+            -Dsonar.login=${{ env.SONAR_TOKEN }} \
+            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+
+      - name: Wait for SonarQube Report Generation
+        run: |
+          echo "Waiting for SonarQube to finalize report generation..."
+          sleep 60
+
+      - name: Generate and Beautify JSON Report
+        run: |
+          curl -u "${{ env.SONAR_TOKEN }}:" \
+            "${{ env.SONAR_HOST_URL }}/api/issues/search?componentKeys=devui-angular&ps=500" \
+            -o sonar-report.json
+          jq '.' sonar-report.json > beautified-sonar-report.json
+
+      - name: Reduce SonarQube JSON Size
+        run: |
+          jq '{issues: [.issues[] | {file: .component, message: .message, severity: .severity, rule: .rule}]}' \
+          beautified-sonar-report.json > reduced-sonar-report.json
+
+      - name: Upload JSON Reports to Azure Blob
+        run: |
+          az storage blob upload \
+            --container-name $AZURE_STORAGE_CONTAINER_FULL \
+            --file beautified-sonar-report.json \
+            --name beautified-sonar-report-$(date +%Y%m%d%H%M%S).json \
+            --sas-token $AZURE_STORAGE_SAS_TOKEN \
+            --account-name $AZURE_STORAGE_ACCOUNT
+
+          az storage blob upload \
+            --container-name $AZURE_STORAGE_CONTAINER \
+            --file reduced-sonar-report.json \
+            --name reduced-sonar-report-$(date +%Y%m%d%H%M%S).json \
+            --sas-token $AZURE_STORAGE_SAS_TOKEN \
+            --account-name $AZURE_STORAGE_ACCOUNT
