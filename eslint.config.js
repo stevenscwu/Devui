@@ -1,52 +1,11 @@
-// @ts-check
-const eslint = require("@eslint/js");
-const tseslint = require("typescript-eslint");
-const angular = require("angular-eslint");
+const { configs, processors } = require("@angular-eslint/eslint-plugin");
+const { configs: tsConfigs } = require("@typescript-eslint/eslint-plugin");
+const { configs: jsConfigs } = require("@eslint/js");
 
-/**
- * See: https://eslint.org/docs/latest/use/configure/ignoring-code#the-ignores-configuration-property
- */
+// You do not need .config() helpers—use plain objects.
+
 module.exports = [
-  // TypeScript and Angular rules for .ts files
-  tseslint.config(
-    {
-      files: ["**/*.ts"],
-      extends: [
-        eslint.configs.recommended,
-        ...tseslint.configs.recommended,
-        ...tseslint.configs.stylistic,
-        ...angular.configs.tsRecommended,
-      ],
-      processor: angular.processInlineTemplates,
-      rules: {
-        "@angular-eslint/directive-selector": [
-          "error",
-          {
-            type: "attribute",
-            prefix: "app",
-            style: "camelCase",
-          },
-        ],
-        "@angular-eslint/component-selector": [
-          "error",
-          {
-            type: "element",
-            prefix: "app",
-            style: "kebab-case",
-          },
-        ],
-      },
-    },
-    {
-      files: ["**/*.html"],
-      extends: [
-        ...angular.configs.templateRecommended,
-        ...angular.configs.templateAccessibility,
-      ],
-      rules: {},
-    }
-  ),
-  // Global ignores (migrate from .eslintignore)
+  // Ignore patterns (flat config way)
   {
     ignores: [
       "node_modules/",
@@ -55,7 +14,59 @@ module.exports = [
       "*.js",
       "*.d.ts",
       "*.json"
-      // Add any additional patterns here from your .eslintignore
+      // Add additional patterns as needed
     ]
+  },
+  // TypeScript/Angular files
+  {
+    files: ["**/*.ts"],
+    languageOptions: {
+      parser: "@typescript-eslint/parser",
+      parserOptions: {
+        project: ["./tsconfig.json"],
+        sourceType: "module"
+      }
+    },
+    plugins: {
+      "@typescript-eslint": require("@typescript-eslint/eslint-plugin"),
+      "@angular-eslint": require("@angular-eslint/eslint-plugin")
+    },
+    rules: {
+      ...jsConfigs.recommended.rules,
+      ...tsConfigs.recommended.rules,
+      ...tsConfigs.stylistic.rules,
+      ...configs.recommended.rules,
+      "@angular-eslint/directive-selector": [
+        "error",
+        {
+          type: "attribute",
+          prefix: "app",
+          style: "camelCase"
+        }
+      ],
+      "@angular-eslint/component-selector": [
+        "error",
+        {
+          type: "element",
+          prefix: "app",
+          style: "kebab-case"
+        }
+      ]
+    },
+    processor: processors.inlineTemplate
+  },
+  // Angular templates
+  {
+    files: ["**/*.html"],
+    plugins: {
+      "@angular-eslint/template": require("@angular-eslint/eslint-plugin-template")
+    },
+    languageOptions: {
+      parser: "@angular-eslint/template-parser"
+    },
+    rules: {
+      ...require("@angular-eslint/eslint-plugin-template").configs["recommended"].rules,
+      ...require("@angular-eslint/eslint-plugin-template").configs["accessibility"].rules
+    }
   }
 ];
