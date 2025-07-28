@@ -53,7 +53,8 @@ module.exports = [
         }
       ]
     },
-    processor: processors.inlineTemplate
+    processor: "@angular-eslint/template/extract-inline-html"
+
   },
   // Angular templates
   {
