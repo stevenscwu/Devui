@@ -1,11 +1,8 @@
-const { configs, processors } = require("@angular-eslint/eslint-plugin");
+const { configs } = require("@angular-eslint/eslint-plugin");
 const { configs: tsConfigs } = require("@typescript-eslint/eslint-plugin");
 const { configs: jsConfigs } = require("@eslint/js");
 
-// You do not need .config() helpers—use plain objects.
-
 module.exports = [
-  // Ignore patterns (flat config way)
   {
     ignores: [
       "node_modules/",
@@ -14,14 +11,12 @@ module.exports = [
       "*.js",
       "*.d.ts",
       "*.json"
-      // Add additional patterns as needed
     ]
   },
-  // TypeScript/Angular files
   {
     files: ["**/*.ts"],
     languageOptions: {
-      parser: "@typescript-eslint/parser",
+      parser: require("@typescript-eslint/parser"),
       parserOptions: {
         project: ["./tsconfig.json"],
         sourceType: "module"
@@ -54,16 +49,14 @@ module.exports = [
       ]
     },
     processor: "@angular-eslint/template/extract-inline-html"
-
   },
-  // Angular templates
   {
     files: ["**/*.html"],
     plugins: {
       "@angular-eslint/template": require("@angular-eslint/eslint-plugin-template")
     },
     languageOptions: {
-      parser: "@angular-eslint/template-parser"
+      parser: require("@angular-eslint/template-parser")
     },
     rules: {
       ...require("@angular-eslint/eslint-plugin-template").configs["recommended"].rules,
