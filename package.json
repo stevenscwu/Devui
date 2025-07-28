@@ -13,7 +13,7 @@
     "build": "ng build",
     "build:website": "ng build --configuration production --base-href /admin/ --deploy-url /admin/ --output-path dist/admin",
     "test": "ng test",
-    "lint": "ng lint",
+    "lint": "eslint --config ./eslint.config.js src",
     "e2e": "ng e2e",
     "tslint": "tslint --fix -c ./tslint.json 'src/**/*{.ts}'",
     "prettier": "prettier --config ./.prettierrc --write \"src/app/pages/**/**/*.html\"",
