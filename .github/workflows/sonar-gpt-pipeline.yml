@@ -47,11 +47,12 @@ jobs:
         id: sonar
         run: |
           ./sonar-scanner-*/bin/sonar-scanner \
-            -Dsonar.projectKey=${{ env.SONAR_PROJECT_KEY }} \
-            -Dsonar.host.url=${{ env.SONAR_HOST_URL }} \
-            -Dsonar.login=${{ env.SONAR_TOKEN }} \
+            -Dsonar.projectKey=Deuvi \
+            -Dsonar.host.url=http://13.89.226.182:9000 \
+            -Dsonar.token=${{ env.SONAR_TOKEN }} \
             -Dsonar.qualitygate.wait=true \
-            -Dsonar.scm.provider=git || true
+            
+          #  -Dsonar.scm.provider=git || true
           
           # Store the task ID for later API calls
           TASK_ID=$(cat .scannerwork/report-task.txt | grep ceTaskId | cut -d'=' -f2)
