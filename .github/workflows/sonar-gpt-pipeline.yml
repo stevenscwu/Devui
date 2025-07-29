@@ -93,7 +93,7 @@ jobs:
           jq '{issues: [.issues[] | {file: .component, message: .message, severity: .severity, rule: .rule}]}' sonar-report.json > reduced-sonar-report.json
 
       # Upload the reduced report to Azure Blob Storage
-      - name: Upload SonarQube Report to Blob Storage
+      - name: Upload all SonarQube Reports to Blob Storage
         uses: azure/cli@v2
         with:
           azcliversion: 2.53.0
