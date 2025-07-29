@@ -12,7 +12,7 @@ jobs:
 
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      SONAR_HOST: ${{ secrets.SONAR_HOST_URL }}
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
       SONAR_PROJECT_KEY: Devui
       AZURE_STORAGE_ACCOUNT: ${{ secrets.AZURE_STORAGE_ACCOUNT }}
       BLOB_SAS_TOKEN: ${{ secrets.BLOB_SAS_TOKEN }}
@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Important for SonarQube to get full history
 
       - name: Use Node.js 18.x
         uses: actions/setup-node@v4
@@ -35,8 +37,6 @@ jobs:
       - name: Run ESLint
         run: npx eslint "src/**/*.{ts,html}" --format json -o eslint-report.json --no-error-on-unmatched-pattern || true
 
-
-
       - name: Download SonarScanner
         run: |
           wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
@@ -44,31 +44,52 @@ jobs:
           export PATH="$PATH:$(pwd)/sonar-scanner-5.0.1.3006-linux/bin"
         
       - name: Run SonarQube Scan
+        id: sonar
         run: |
           ./sonar-scanner-*/bin/sonar-scanner \
             -Dsonar.projectKey=${{ env.SONAR_PROJECT_KEY }} \
-            -Dsonar.host.url=${{ env.SONAR_HOST }} \
+            -Dsonar.host.url=${{ env.SONAR_HOST_URL }} \
             -Dsonar.login=${{ env.SONAR_TOKEN }} \
-            -Dsonar.qualitygate.wait=true || true
+            -Dsonar.qualitygate.wait=true \
+            -Dsonar.scm.provider=git || true
+          
+          # Store the task ID for later API calls
+          TASK_ID=$(cat .scannerwork/report-task.txt | grep ceTaskId | cut -d'=' -f2)
+          echo "TASK_ID=$TASK_ID" >> $GITHUB_ENV
 
-      # Find the SonarQube JSON report
-      - name: Find SonarQube report
-        id: find_report
+      # Fetch analysis results from SonarQube API
+      - name: Fetch SonarQube analysis results
         run: |
-          REPORT_PATH=$(find . -type f -name "sonar-report.json" | head -n 1)
-          if [ -z "$REPORT_PATH" ]; then
-            echo "SonarQube report not found!"; exit 1
+          # Wait for analysis to complete
+          sleep 10
+          
+          # Get analysis ID from task ID
+          ANALYSIS_ID=$(curl -s -u ${{ env.SONAR_TOKEN }}: "${{ env.SONAR_HOST_URL }}/api/ce/task?id=$TASK_ID" | jq -r '.task.analysisId')
+          
+          if [ -z "$ANALYSIS_ID" ] || [ "$ANALYSIS_ID" == "null" ]; then
+            echo "Failed to get analysis ID. Waiting longer..."
+            sleep 20
+            ANALYSIS_ID=$(curl -s -u ${{ env.SONAR_TOKEN }}: "${{ env.SONAR_HOST_URL }}/api/ce/task?id=$TASK_ID" | jq -r '.task.analysisId')
           fi
-          echo "REPORT_PATH=$REPORT_PATH" >> $GITHUB_ENV
+          
+          if [ -z "$ANALYSIS_ID" ] || [ "$ANALYSIS_ID" == "null" ]; then
+            echo "Still failed to get analysis ID. Using component search instead..."
+            ANALYSIS_ID=$(curl -s -u ${{ env.SONAR_TOKEN }}: "${{ env.SONAR_HOST_URL }}/api/project_analyses/search?project=${{ env.SONAR_PROJECT_KEY }}&ps=1" | jq -r '.analyses[0].key')
+          fi
+          
+          echo "ANALYSIS_ID=$ANALYSIS_ID" >> $GITHUB_ENV
+          
+          # Fetch issues from the analysis
+          curl -s -u ${{ env.SONAR_TOKEN }}: "${{ env.SONAR_HOST_URL }}/api/issues/search?projectKeys=${{ env.SONAR_PROJECT_KEY }}&ps=500" > sonar-report.json
 
       # Beautify the report
       - name: Beautify SonarQube JSON
-        run: jq '.' "$REPORT_PATH" > sonar-report-beautified.json
+        run: jq '.' sonar-report.json > sonar-report-beautified.json
 
       # Reduce the report for GPT summary
       - name: Reduce SonarQube JSON
         run: |
-          jq '{issues: [.issues[] | {file: .component, message: .message, severity: .severity, rule: .rule}]}' sonar-report-beautified.json > reduced-sonar-report.json
+          jq '{issues: [.issues[] | {file: .component, message: .message, severity: .severity, rule: .rule}]}' sonar-report.json > reduced-sonar-report.json
 
       # Upload the reduced report to Azure Blob Storage
       - name: Upload to Azure Blob Storage
