@@ -5,7 +5,7 @@
   "description": "DevUI Admin based on Angular and DevUI components",
   "repository": {
     "type": "git",
-    "url": "https://github.com/DevCloudFE/ng-devui-admin"
+    "url": "https://github.com/stevenscwu/Devui"
   },
   "scripts": {
     "ng": "ng",
@@ -13,7 +13,7 @@
     "build": "ng build",
     "build:website": "ng build --configuration production --base-href /admin/ --deploy-url /admin/ --output-path dist/admin",
     "test": "ng test",
-    "lint": "eslint --config ./eslint.config.js src",
+    "lint": "eslint src --ext .ts,.html",
     "e2e": "ng e2e",
     "tslint": "tslint --fix -c ./tslint.json 'src/**/*{.ts}'",
     "prettier": "prettier --config ./.prettierrc --write \"src/app/pages/**/**/*.html\"",
@@ -49,10 +49,16 @@
     "@types/jasmine": "~3.10.0",
     "@types/jasminewd2": "~2.0.3",
     "@types/node": "^12.11.1",
-    "angular-eslint": "20.1.1",
+    "@angular-eslint/eslint-plugin": "15.2.1",
+    "@angular-eslint/eslint-plugin-template": "15.2.1",
+    "@angular-eslint/template-parser": "15.2.1",
+    "@typescript-eslint/eslint-plugin": "^5.59.11",
+    "@typescript-eslint/parser": "^5.59.11",
+    "eslint": "^8.47.0",
     "azure-functions-core-tools": "^4.1.0",
     "codelyzer": "^6.0.0",
-    "eslint": "^9.29.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-prettier": "^5.0.1",
     "jasmine-core": "~3.10.0",
     "jasmine-spec-reporter": "~5.0.0",
     "karma": "~6.3.4",
