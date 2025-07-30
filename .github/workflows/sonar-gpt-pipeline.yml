@@ -83,30 +83,38 @@ jobs:
           # Fetch issues from the analysis
           curl -s -u ${{ env.SONAR_TOKEN }}: "${{ env.SONAR_HOST_URL }}/api/issues/search?projectKeys=${{ env.SONAR_PROJECT_KEY }}&ps=500" > sonar-report.json
 
-      # Beautify the report
-      - name: Beautify SonarQube JSON
-        run: jq '.' sonar-report.json > sonar-report-beautified.json
-
-      # Reduce the report for GPT summary
-      - name: Reduce SonarQube JSON
+      - name: Upload SonarQube Reports using Azure CLI with SAS Token
+        env:
+          AZURE_STORAGE_SAS_TOKEN: ${{ secrets.BLOB_SAS_TOKEN }}
+          AZURE_STORAGE_ACCOUNT: ${{ secrets.AZURE_STORAGE_ACCOUNT }}
+          AZURE_STORAGE_CONTAINER: sonarinput
         run: |
-          jq '{issues: [.issues[] | {file: .component, message: .message, severity: .severity, rule: .rule}]}' sonar-report.json > reduced-sonar-report.json
+          sudo apt-get update && sudo apt-get install -y jq azure-cli
 
-      # Upload the reduced report to Azure Blob Storage
-      - name: Upload all SonarQube Reports to Blob Storage
-        uses: azure/cli@v2
-        with:
-          azcliversion: 2.53.0
-          inlineScript: |
-            for FILE in reduced-sonar-report.json beautified-sonar-report.json; do
-              az storage blob upload \
-                --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
-                --container-name sonarinput \
-                --name "$FILE-$(date +%Y%m%d%H%M%S)" \
-                --file "$FILE" \
-                --sas-token ${{ secrets.BLOB_SAS_TOKEN }} \
-                --auth-mode key
-            done
+          TIMESTAMP=$(date +%Y%m%d)
+          FOLDER_DATE=$(date +%Y%m%d)
+
+          BEAUTIFIED="sonar-report-${TIMESTAMP}.json"
+          jq '.' sonar-report.json > "$BEAUTIFIED"
+
+          REDUCED="reduced-sonar-report-${TIMESTAMP}.json"
+          jq '{issues: [.issues[] | {file: .component, message: .message, severity: .severity, rule: .rule, line: .line, effort: .effort, type: .type}]}' "$BEAUTIFIED" > "$REDUCED"
+
+          # Explicit Azure CLI upload with --auth-mode key and proper SAS token
+          for FILE in "$BEAUTIFIED" "$REDUCED"; do
+            az storage blob upload \
+              --account-name "$AZURE_STORAGE_ACCOUNT" \
+              --container-name "$AZURE_STORAGE_CONTAINER" \
+              --name "$FILE" \
+              --file "$FILE" \
+              --sas-token "$AZURE_STORAGE_SAS_TOKEN" \
+              --auth-mode key
+          done
+
+          mkdir -p "report/${FOLDER_DATE}"
+          cp "$BEAUTIFIED" "report/${FOLDER_DATE}/"
+          cp "$REDUCED" "report/${FOLDER_DATE}/"
+          echo "Reports saved to report/${FOLDER_DATE}/"
 
 
       - name: Job complete
